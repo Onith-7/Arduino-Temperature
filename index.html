@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temperature Data from Arduino</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: linear-gradient(120deg, #e0e7ff 0%, #f4f4f4 100%);
+      margin: 0;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 950px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      padding: 32px 28px 24px 28px;
+    }
+    h2 {
+      text-align: center;
+      font-weight: 600;
+      color: #22223b;
+      margin-bottom: 28px;
+      letter-spacing: 1px;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .controls input[type="file"] {
+      padding: 8px 0;
+    }
+    .controls button {
+      background: #0074D9;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .controls button:hover {
+      background: #005fa3;
+    }
+    #graph {
+      width: 100%;
+      height: 80vh;
+      min-height: 600px;
+      margin: 0 auto 32px auto;
+      background: #f8fafc;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px #e0e7ff;
+    }
+    #data-table {
+      width: 100%;
+      margin: 0 auto;
+      background: #f8fafc;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px #e0e7ff;
+      border-collapse: collapse;
+      overflow: hidden;
+    }
+    #data-table th, #data-table td {
+      border: 1px solid #e0e7ff;
+      padding: 10px 14px;
+      text-align: center;
+      font-size: 1rem;
+    }
+    #data-table th {
+      background: #0074D9;
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    #data-table tr:nth-child(even) td {
+      background: #f1f5fa;
+    }
+    @media (max-width: 700px) {
+      .container { padding: 10px 2vw; }
+      #graph { height: 40vh; }
+      #data-table th, #data-table td { font-size: 0.9rem; padding: 6px 4px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Temperature Data from Arduino</h2>
+    <div class="controls">
+      <input type="file" id="csvFile" accept=".csv" />
+      <button id="saveDataBtn">Save Data to Browser</button>
+      <button id="loadDataBtn">Load Saved Data</button>
+    </div>
+    <div id="graph"></div>
+    <div id="table-container"></div>
+  </div>
+  <script>
+    function renderData(csvText) {
+      const lines = csvText.split('\\n');
+      const headers = lines[0].split(',');
+      const data = lines.slice(1).map(line => {
+        const cols = line.split(',');
+        return {
+          day: cols[0],
+          hour: +cols[1],
+          temperature: +cols[2]
+        };
+      });
+
+      // Plotly graph
+      const trace1 = {
+        x: data.map(d => d.hour),
+        y: data.map(d => d.temperature),
+        mode: 'lines+markers',
+        type: 'scatter',
+        marker: { color: '#0074D9' },
+        line: { width: 2 }
+      };
+      const layout = {
+        title: 'Temperature Over Time',
+        xaxis: { title: 'Hour of Day' },
+        yaxis: { title: 'Temperature (°C)' },
+        margin: { t: 40, r: 40, b: 40, l: 60 }
+      };
+      Plotly.newPlot('graph', [trace1], layout);
+
+      // Data table
+      let tableHtml = '<table id="data-table"><tr>';
+      headers.forEach(header => {
+        tableHtml += `<th>${header}</th>`;
+      });
+      tableHtml += '</tr>';
+      data.forEach(row => {
+        tableHtml += '<tr>';
+        Object.values(row).forEach(value => {
+          tableHtml += `<td>${value}</td>`;
+        });
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</table>';
+      document.getElementById('table-container').innerHTML = tableHtml;
+    }
+
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const csvText = evt.target.result;
+        localStorage.setItem('arduino_csv_data', csvText);
+        renderData(csvText);
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('saveDataBtn').addEventListener('click', function() {
+      const csvText = localStorage.getItem('arduino_csv_data');
+      if (!csvText) {
+        alert('No data available to save!');
+        return;
+      }
+      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'temperature_data.csv');
+      a.style.visibility = 'hidden';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+    document.getElementById('loadDataBtn').addEventListener('click', function() {
+      const csvText = localStorage.getItem('arduino_csv_data');
+      if (csvText) {
+        renderData(csvText);
+      } else {
+        alert('No saved data found!');
+      }
+    });
+
+    // Auto-load data on page load if available
+    window.onload = function() {
+      const csvText = localStorage.getItem('arduino_csv_data');
+      if (csvText) {
+        renderData(csvText);
+      }
+    };
+  </script>
+</body>
+</html>
